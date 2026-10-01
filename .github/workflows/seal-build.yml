@@ -1,0 +1,77 @@
+name: seal-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: local
+      GOPROXY: https://proxy.golang.org,direct
+      MODULE: github.com/temporalio/sqlparser
+      VERSION: v0.0.0-20231115171017-f4060bcfa6cb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: false
+      - name: Build module packages
+        working-directory: src
+        run: go build ./...
+      - name: Build module zip helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/helper"
+          cd "$RUNNER_TEMP/helper"
+          cat > main.go <<'EOF'
+          package main
+
+          import (
+              "log"
+              "os"
+
+              "golang.org/x/mod/module"
+              "golang.org/x/mod/zip"
+          )
+
+          func main() {
+              if len(os.Args) != 5 {
+                  log.Fatal("usage: create_mod <module> <version> <dir> <out.zip>")
+              }
+              f, err := os.Create(os.Args[4])
+              if err != nil {
+                  log.Fatal(err)
+              }
+              defer f.Close()
+              mv := module.Version{Path: os.Args[1], Version: os.Args[2]}
+              if err := zip.CreateFromDir(f, mv, os.Args[3]); err != nil {
+                  log.Fatal(err)
+              }
+          }
+          EOF
+          go mod init sealhelper
+          go get golang.org/x/mod@v0.24.0
+          go build -o "$RUNNER_TEMP/create_mod" .
+      - name: Create module zip
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          rm -rf "$RUNNER_TEMP/zipsrc"
+          cp -a "$GITHUB_WORKSPACE/src" "$RUNNER_TEMP/zipsrc"
+          rm -rf "$RUNNER_TEMP/zipsrc/.git"
+          # Upstream ships no .github/ directory; drop this seal workflow so it
+          # does not leak into the module zip.
+          rm -rf "$RUNNER_TEMP/zipsrc/.github"
+          "$RUNNER_TEMP/create_mod" "$MODULE" "$VERSION" "$RUNNER_TEMP/zipsrc" "$GITHUB_WORKSPACE/dist/$VERSION.zip"
+          unzip -l "$GITHUB_WORKSPACE/dist/$VERSION.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module-zip
+          path: dist/v0.0.0-20231115171017-f4060bcfa6cb.zip
+          if-no-files-found: error
