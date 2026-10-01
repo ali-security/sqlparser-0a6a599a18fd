@@ -231,6 +231,14 @@ func TestExtractMysqlComment(t *testing.T) {
 		input:      "/*! SET max_execution_time=5000*/",
 		outSQL:     "SET max_execution_time=5000",
 		outVersion: "",
+	}, {
+		input:      "/*!*/",
+		outSQL:     "",
+		outVersion: "",
+	}, {
+		input:      "/*!50708*/",
+		outSQL:     "",
+		outVersion: "",
 	}}
 	for _, testCase := range testCases {
 		gotVersion, gotSQL := ExtractMysqlComment(testCase.input)

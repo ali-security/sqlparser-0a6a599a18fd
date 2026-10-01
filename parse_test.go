@@ -571,6 +571,12 @@ var (
 		input:  "select /*!401011 from*/ t",
 		output: "select 1 from t",
 	}, {
+		input:  "select /*!*/ * from t",
+		output: "select * from t",
+	}, {
+		input:  "select /*!50708*/ * from t",
+		output: "select * from t",
+	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
 		input: "insert /* simple */ into a values (1)",
